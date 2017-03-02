@@ -59,9 +59,37 @@ namespace Compute.Tests
             }
         }
 
-        public void TestScaleSetOperationsInternal(MockContext context, bool hasManagedDisks = false)
+        /// <summary>
+        /// Covers the following Operations with a managed identity:
+        /// Create RG
+        /// Create Storage Account
+        /// Create Network Resources
+        /// Create VMScaleSet with extension
+        /// Get VMScaleSet Model View
+        /// Get VMScaleSet Instance View
+        /// List VMScaleSets in a RG
+        /// List Available Skus
+        /// Delete VMScaleSet
+        /// Delete RG
+        /// </summary>
+        [Fact]
+        [Trait("Name", "TestVMScaleSetScenarioOperations_ManagedIdentity")]
+        public void TestVMScaleSetScenarioOperations_ManagedIdentity()
+        {
+            using (MockContext context = MockContext.Start(this.GetType().FullName))
+            {
+                TestScaleSetOperationsInternal(context, hasManagedIdentity: true, location: "WestUS");
+            }
+        }
+
+        public void TestScaleSetOperationsInternal(MockContext context, bool hasManagedDisks = false, bool hasManagedIdentity = false,
+            string location = null)
         {
             EnsureClientsInitialized(context);
+            if (location != null)
+            {
+                m_location = location;
+            }
 
             ImageReference imageRef = GetPlatformVMImage(useWindowsImage: true);
             // Create resource group
@@ -92,16 +120,17 @@ namespace Compute.Tests
                     out inputVMScaleSet,
                     extensionProfile,
                     (vmScaleSet) => { vmScaleSet.Overprovision = true; },
-                    createWithManagedDisks: hasManagedDisks);
+                    createWithManagedDisks: hasManagedDisks,
+                    createWithManagedIdentity: hasManagedIdentity);
 
-                ValidateVMScaleSet(inputVMScaleSet, getResponse, hasManagedDisks);
+                ValidateVMScaleSet(inputVMScaleSet, getResponse, hasManagedDisks, hasManagedIdentity);
 
                 var getInstanceViewResponse = m_CrpClient.VirtualMachineScaleSets.GetInstanceView(rgName, vmssName);
                 Assert.NotNull(getInstanceViewResponse);
                 ValidateVMScaleSetInstanceView(inputVMScaleSet, getInstanceViewResponse);
                     
                 var listResponse = m_CrpClient.VirtualMachineScaleSets.List(rgName);
-                ValidateVMScaleSet(inputVMScaleSet, listResponse.FirstOrDefault(x => x.Name == vmssName), hasManagedDisks);
+                ValidateVMScaleSet(inputVMScaleSet, listResponse.FirstOrDefault(x => x.Name == vmssName), hasManagedDisks, hasManagedIdentity);
 
                 var listSkusResponse = m_CrpClient.VirtualMachineScaleSets.ListSkus(rgName, vmssName);
                 Assert.NotNull(listSkusResponse);

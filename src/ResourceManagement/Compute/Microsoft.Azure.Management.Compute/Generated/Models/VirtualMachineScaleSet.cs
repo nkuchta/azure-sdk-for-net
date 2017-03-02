@@ -50,7 +50,9 @@ namespace Microsoft.Azure.Management.Compute.Models
         /// <param name="singlePlacementGroup">When true this limits the scale
         /// set to a single placement group, of max size 100 virtual
         /// machines.</param>
-        public VirtualMachineScaleSet(string location, string id = default(string), string name = default(string), string type = default(string), IDictionary<string, string> tags = default(IDictionary<string, string>), Sku sku = default(Sku), Plan plan = default(Plan), UpgradePolicy upgradePolicy = default(UpgradePolicy), VirtualMachineScaleSetVMProfile virtualMachineProfile = default(VirtualMachineScaleSetVMProfile), string provisioningState = default(string), bool? overprovision = default(bool?), bool? singlePlacementGroup = default(bool?))
+        /// <param name="identity">The identity of the virtual machine scale
+        /// set, if configured.</param>
+        public VirtualMachineScaleSet(string location, string id = default(string), string name = default(string), string type = default(string), IDictionary<string, string> tags = default(IDictionary<string, string>), Sku sku = default(Sku), Plan plan = default(Plan), UpgradePolicy upgradePolicy = default(UpgradePolicy), VirtualMachineScaleSetVMProfile virtualMachineProfile = default(VirtualMachineScaleSetVMProfile), string provisioningState = default(string), bool? overprovision = default(bool?), bool? singlePlacementGroup = default(bool?), VirtualMachineScaleSetIdentity identity = default(VirtualMachineScaleSetIdentity))
             : base(location, id, name, type, tags)
         {
             Sku = sku;
@@ -60,6 +62,7 @@ namespace Microsoft.Azure.Management.Compute.Models
             ProvisioningState = provisioningState;
             Overprovision = overprovision;
             SinglePlacementGroup = singlePlacementGroup;
+            Identity = identity;
         }
 
         /// <summary>
@@ -106,6 +109,13 @@ namespace Microsoft.Azure.Management.Compute.Models
         /// </summary>
         [JsonProperty(PropertyName = "properties.singlePlacementGroup")]
         public bool? SinglePlacementGroup { get; set; }
+
+        /// <summary>
+        /// Gets or sets the identity of the virtual machine scale set, if
+        /// configured.
+        /// </summary>
+        [JsonProperty(PropertyName = "identity")]
+        public VirtualMachineScaleSetIdentity Identity { get; set; }
 
         /// <summary>
         /// Validate the object.

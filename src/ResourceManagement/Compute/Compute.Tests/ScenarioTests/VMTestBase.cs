@@ -192,10 +192,11 @@ namespace Compute.Tests
             Action<VirtualMachine> vmCustomizer = null,
             bool createWithPublicIpAddress = false,
             bool waitOperation = true,
-            bool hasManagedDisks = false)
+            bool hasManagedDisks = false,
+            bool hasManagedIdentity = false)
         {
             return CreateVM_NoAsyncTracking(rgName, asName, storageAccount.Name, imageRef, out inputVM, vmCustomizer,
-                createWithPublicIpAddress, waitOperation, hasManagedDisks);
+                createWithPublicIpAddress, waitOperation, hasManagedDisks, hasManagedIdentity);
         }
 
         protected VirtualMachine CreateVM_NoAsyncTracking(
@@ -204,7 +205,8 @@ namespace Compute.Tests
             Action<VirtualMachine> vmCustomizer = null,
             bool createWithPublicIpAddress = false,
             bool waitOperation = true,
-            bool hasManagedDisks = false)
+            bool hasManagedDisks = false,
+            bool hasManagedIdentity = false)
         {
             try
             {
@@ -233,7 +235,7 @@ namespace Compute.Tests
 
                 string asetId = CreateAvailabilitySet(rgName, asName, hasManagedDisks);
 
-                inputVM = CreateDefaultVMInput(rgName, storageAccountName, imageRef, asetId, nicResponse.Id, hasManagedDisks);
+                inputVM = CreateDefaultVMInput(rgName, storageAccountName, imageRef, asetId, nicResponse.Id, hasManagedDisks, hasManagedIdentity);
                 if (vmCustomizer != null)
                 {
                     vmCustomizer(inputVM);
@@ -258,13 +260,13 @@ namespace Compute.Tests
                 Assert.True(
                     createOrUpdateResponse.AvailabilitySet.Id
                         .ToLowerInvariant() == asetId.ToLowerInvariant());
-                ValidateVM(inputVM, createOrUpdateResponse, expectedVMReferenceId, hasManagedDisks);
+                ValidateVM(inputVM, createOrUpdateResponse, expectedVMReferenceId, hasManagedDisks, hasManagedIdentity);
 
                 // CONSIDER dropping this Get and ValidateVM call. Nothing changes in the VM model after it's accepted.
                 // There might have been intent to track the async operation to completion and then check the VM is
                 // still this and okay, but that's not what the code above does and still doesn't make much sense.
                 var getResponse = m_CrpClient.VirtualMachines.Get(rgName, inputVM.Name);
-                ValidateVM(inputVM, getResponse, expectedVMReferenceId, hasManagedDisks);
+                ValidateVM(inputVM, getResponse, expectedVMReferenceId, hasManagedDisks, hasManagedIdentity);
 
                 return getResponse;
             }
@@ -629,7 +631,8 @@ namespace Compute.Tests
             return asetId;
         }
 
-        protected VirtualMachine CreateDefaultVMInput(string rgName, string storageAccountName, ImageReference imageRef, string asetId, string nicId, bool hasManagedDisks = false)
+        protected VirtualMachine CreateDefaultVMInput(string rgName, string storageAccountName, ImageReference imageRef, string asetId, string nicId, bool hasManagedDisks = false,
+            bool hasManagedIdentity = false)
         {
             // Generate Container name to hold disk VHds
             string containerName = ComputeManagementTestUtilities.GenerateName(TestPrefix);
@@ -640,6 +643,7 @@ namespace Compute.Tests
             var vm = new VirtualMachine
             {
                 Location = m_location,
+                Identity = !hasManagedIdentity ? null : new VirtualMachineIdentity(type: ResourceIdentityType.SystemAssigned),
                 Tags = new Dictionary<string, string>() { { "RG", "rg" }, { "testTag", "1" } },
                 AvailabilitySet = new Microsoft.Azure.Management.Compute.Models.SubResource() { Id = asetId },
                 HardwareProfile = new HardwareProfile
@@ -689,7 +693,7 @@ namespace Compute.Tests
                     AdminUsername = "Foo12",
                     AdminPassword = "BaR@123" + rgName,
                     ComputerName = "test"
-                }
+                },
             };
 
             typeof(Microsoft.Azure.Management.Compute.Models.Resource).GetRuntimeProperty("Name").SetValue(vm, ComputeManagementTestUtilities.GenerateName("vm"));
@@ -697,7 +701,7 @@ namespace Compute.Tests
             return vm;
         }
 
-        protected void ValidateVM(VirtualMachine vm, VirtualMachine vmOut, string expectedVMReferenceId, bool hasManagedDisks = false)
+        protected void ValidateVM(VirtualMachine vm, VirtualMachine vmOut, string expectedVMReferenceId, bool hasManagedDisks = false, bool hasManagedIdentity = false)
         {
             Assert.True(vmOut.LicenseType == vm.LicenseType);
 
@@ -822,6 +826,14 @@ namespace Compute.Tests
 
                     // ReSharper enable PossibleNullReferenceException
                 }
+            }
+
+            if (hasManagedIdentity)
+            {
+                Assert.NotNull(vmOut.Identity);
+                Assert.Equal(ResourceIdentityType.SystemAssigned, vmOut.Identity.Type);
+                Assert.NotNull(vmOut.Identity.PrincipalId);
+                Assert.NotNull(vmOut.Identity.TenantId);
             }
 
             Assert.NotNull(vmOut.AvailabilitySet);

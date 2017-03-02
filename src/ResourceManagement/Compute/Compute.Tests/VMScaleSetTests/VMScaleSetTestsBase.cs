@@ -43,7 +43,8 @@ namespace Compute.Tests
             string storageAccountName,
             ImageReference imageRef,
             string subnetId,
-            bool hasManagedDisks = false)
+            bool hasManagedDisks = false,
+            bool hasManagedIdentity = false)
         {
             // Generate Container name to hold disk VHds
             string containerName = TestUtilities.GenerateName(TestPrefix);
@@ -53,6 +54,7 @@ namespace Compute.Tests
             return new VirtualMachineScaleSet()
             {
                 Location = m_location,
+                Identity = !hasManagedIdentity ? null : new VirtualMachineScaleSetIdentity(type: ResourceIdentityType.SystemAssigned),
                 Tags = new Dictionary<string, string>() { { "RG", "rg" }, { "testTag", "1" } },
                 Sku = new Sku()
                 {
@@ -74,7 +76,7 @@ namespace Compute.Tests
                             Caching = CachingTypes.None,
                             CreateOption = DiskCreateOptionTypes.FromImage,
                             Name = "test",
-                            VhdContainers = new List<string>{ vhdContainer }
+                            VhdContainers = new List<string> { vhdContainer }
                         },
                         DataDisks = !hasManagedDisks ? null : new List<VirtualMachineScaleSetDataDisk>
                         {
@@ -117,7 +119,7 @@ namespace Compute.Tests
                         }
                     },
                     ExtensionProfile = new VirtualMachineScaleSetExtensionProfile(),
-                }
+                },
             };
         }
 
@@ -131,6 +133,7 @@ namespace Compute.Tests
             Action<VirtualMachineScaleSet> vmScaleSetCustomizer = null,
             bool createWithPublicIpAddress = false,
             bool createWithManagedDisks = false,
+            bool createWithManagedIdentity = false,
             Subnet subnet = null)
         {
             try
@@ -144,6 +147,7 @@ namespace Compute.Tests
                                                                                      vmScaleSetCustomizer,
                                                                                      createWithPublicIpAddress,
                                                                                      createWithManagedDisks,
+                                                                                     createWithManagedIdentity,
                                                                                      subnet);
 
                 var getResponse = m_CrpClient.VirtualMachineScaleSets.Get(rgName, vmssName);
@@ -209,6 +213,7 @@ namespace Compute.Tests
             Action<VirtualMachineScaleSet> vmScaleSetCustomizer = null,
             bool createWithPublicIpAddress = false,
             bool createWithManagedDisks = false,
+            bool createWithManagedIdentity = false,
             Subnet subnet = null)
         {
             // Create the resource Group, it might have been already created during StorageAccount creation.
@@ -228,7 +233,8 @@ namespace Compute.Tests
                 subnetResponse,
                 getPublicIpAddressResponse != null ? getPublicIpAddressResponse.IpAddress : null);
 
-            inputVMScaleSet = CreateDefaultVMScaleSetInput(rgName, storageAccount.Name, imageRef, subnetResponse.Id, hasManagedDisks:createWithManagedDisks);
+            inputVMScaleSet = CreateDefaultVMScaleSetInput(rgName, storageAccount.Name, imageRef, subnetResponse.Id,
+                hasManagedDisks: createWithManagedDisks, hasManagedIdentity: createWithManagedIdentity);
             if (vmScaleSetCustomizer != null)
             {
                 vmScaleSetCustomizer(inputVMScaleSet);
@@ -241,7 +247,7 @@ namespace Compute.Tests
             Assert.True(createOrUpdateResponse.Name == vmssName);
             Assert.True(createOrUpdateResponse.Location.ToLower() == inputVMScaleSet.Location.ToLower().Replace(" ", ""));
 
-            ValidateVMScaleSet(inputVMScaleSet, createOrUpdateResponse, createWithManagedDisks);
+            ValidateVMScaleSet(inputVMScaleSet, createOrUpdateResponse, createWithManagedDisks, createWithManagedIdentity);
 
             return createOrUpdateResponse;
         }
@@ -258,7 +264,8 @@ namespace Compute.Tests
             Assert.True(instancesCount == vmScaleSet.Sku.Capacity);
         }
 
-        protected void ValidateVMScaleSet(VirtualMachineScaleSet vmScaleSet, VirtualMachineScaleSet vmScaleSetOut, bool hasManagedDisks = false)
+        protected void ValidateVMScaleSet(VirtualMachineScaleSet vmScaleSet, VirtualMachineScaleSet vmScaleSetOut,
+            bool hasManagedDisks = false, bool hasManagedIdentity = false)
         {
             Assert.True(!string.IsNullOrEmpty(vmScaleSetOut.ProvisioningState));
 
@@ -410,6 +417,14 @@ namespace Compute.Tests
             else
             {
                 Assert.True((vmScaleSetOut.VirtualMachineProfile.NetworkProfile == null) || (vmScaleSetOut.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations.Count == 0));
+            }
+
+            if (hasManagedIdentity)
+            {
+                Assert.NotNull(vmScaleSetOut.Identity);
+                Assert.Equal(ResourceIdentityType.SystemAssigned, vmScaleSetOut.Identity.Type);
+                Assert.NotNull(vmScaleSetOut.Identity.PrincipalId);
+                Assert.NotNull(vmScaleSetOut.Identity.TenantId);
             }
         }
 
